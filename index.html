@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Task Manager with Firestore</title>
+  <style>
+    body { font-family: Arial; padding: 20px; background: #f0f0f0; }
+    .hidden { display: none; }
+    .task { padding: 10px; margin-bottom: 10px; background: #fff; border: 1px solid #ccc; }
+    .task.complete { text-decoration: line-through; color: gray; }
+    button { margin: 0 5px; }
+  </style>
+</head>
+<body>
+  <h1>Task Manager (Firestore)</h1>
+
+  <div id="auth-section">
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <button id="signup">Sign Up</button>
+    <button id="login">Login</button>
+  </div>
+
+  <div id="app-section" class="hidden">
+    <p>Welcome, <span id="user-email"></span> <button id="logout">Logout</button></p>
+
+    <form id="task-form">
+      <input type="text" id="task-title" placeholder="Task Title" required />
+      <input type="text" id="task-desc" placeholder="Task Description" />
+      <button type="submit">Add Task</button>
+    </form>
+
+    <div id="task-container"></div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCj0qgCB2OrzXGZ4dbFNYzVUNN6uQQ0sZ8",
+      authDomain: "task-maneger-69a4a.firebaseapp.com",
+      projectId: "task-maneger-69a4a",
+      storageBucket: "task-maneger-69a4a.firebasestorage.app",
+      messagingSenderId: "75794000711",
+      appId: "1:75794000711:web:d291fd9a2da2d8b698ba62",
+      measurementId: "G-SZZN3VZ2MT"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    const authSection = document.getElementById("auth-section");
+    const appSection = document.getElementById("app-section");
+    const taskForm = document.getElementById("task-form");
+    const taskContainer = document.getElementById("task-container");
+    const userEmailSpan = document.getElementById("user-email");
+
+    // Auth
+    document.getElementById("signup").onclick = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => alert("Signed up!"))
+        .catch(err => alert(err.message));
+    };
+
+    document.getElementById("login").onclick = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.signInWithEmailAndPassword(email, password)
+        .catch(err => alert(err.message));
+    };
+
+    document.getElementById("logout").onclick = () => auth.signOut();
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        authSection.classList.add("hidden");
+        appSection.classList.remove("hidden");
+        userEmailSpan.textContent = user.email;
+        loadTasks(user.uid);
+      } else {
+        authSection.classList.remove("hidden");
+        appSection.classList.add("hidden");
+        taskContainer.innerHTML = "";
+      }
+    });
+
+    // Add Task
+    taskForm.onsubmit = (e) => {
+      e.preventDefault();
+      const user = auth.currentUser;
+      const title = document.getElementById("task-title").value;
+      const desc = document.getElementById("task-desc").value;
+      db.collection("tasks").add({
+        uid: user.uid,
+        title,
+        description: desc,
+        completed: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      taskForm.reset();
+    };
+
+    // Load Tasks
+    function loadTasks(uid) {
+      db.collection("tasks")
+        .where("uid", "==", uid)
+        .orderBy("createdAt", "desc")
+        .onSnapshot(snapshot => {
+          taskContainer.innerHTML = "";
+          snapshot.forEach(doc => {
+            const task = doc.data();
+            const id = doc.id;
+            const div = document.createElement("div");
+            div.className = "task" + (task.completed ? " complete" : "");
+            div.innerHTML = `
+              <strong>${task.title}</strong><br>${task.description || ""}<br>
+              <button onclick="toggleComplete('${id}', ${!task.completed})">${task.completed ? "Undo" : "Complete"}</button>
+              <button onclick="editTask('${id}', '${task.title}', '${task.description || ""}')">Edit</button>
+              <button onclick="deleteTask('${id}')">Delete</button>
+            `;
+            taskContainer.appendChild(div);
+          });
+        });
+    }
+
+    function toggleComplete(id, status) {
+      db.collection("tasks").doc(id).update({ completed: status });
+    }
+
+    function deleteTask(id) {
+      db.collection("tasks").doc(id).delete();
+    }
+
+    function editTask(id, oldTitle, oldDesc) {
+      const newTitle = prompt("Edit title", oldTitle);
+      const newDesc = prompt("Edit description", oldDesc);
+      if (newTitle !== null) {
+        db.collection("tasks").doc(id).update({ title: newTitle, description: newDesc });
+      }
+    }
+  </script>
+</body>
+</html>
